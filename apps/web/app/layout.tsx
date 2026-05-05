@@ -24,7 +24,7 @@ const instrument = Instrument_Serif({
   display: 'swap',
 });
 
-const title = `${appName} — slides as React code, crafted by agents`;
+const title = `${appName} — a slide framework built for agents`;
 const description =
   'A React-first slide framework authored by AI agents. Each page is arbitrary code on a 1920×1080 canvas — versioned, reviewable, yours.';
 
