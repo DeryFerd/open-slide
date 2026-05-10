@@ -1,11 +1,21 @@
 ---
 name: current-slide
-description: Resolve which slide, page, and (optionally) selected element the user is currently viewing in the open-slide dev server. Consult this whenever the user references "this page", "this slide", "this element", "the slide I'm on", "the current page", or any deictic reference to slide content without naming it. Reads `node_modules/.open-slide/current.json`, which the dev server writes whenever the user navigates or picks an element in the inspector.
+description: Resolve which slide, page, and (optionally) selected element the user is currently viewing in the open-slide dev server. Consult this whenever the user references "this page", "this slide", "this element", "the slide I'm on", "the current page", or any deictic reference to slide content without naming it. Re-read `node_modules/.open-slide/current.json` at the start of every such turn — the user navigates between turns, so a value you read earlier in the conversation is almost certainly stale.
 ---
 
 # Where is the user right now?
 
 When the user says "fix this page", "tweak this heading", or "the slide I'm looking at", they almost never name the slide id, page number, or element — they mean wherever they are in the dev viewer. Before asking "which slide?" or "which element?", check the file the dev server writes on every navigation and inspector pick.
+
+## Re-read on every deictic turn — never reuse a prior read
+
+`current.json` is a live cursor, not a fact about the conversation. The user moves between slides, pages, and elements freely between your turns — including while you were doing other work. **Read the file fresh at the start of every new turn that uses a deictic reference**, even if:
+
+- you already read it earlier in this same conversation,
+- you just finished editing the slide it pointed to,
+- the user's new message sounds like a continuation ("now make it bigger", "also fix this one", "keep going").
+
+A "continue editing" follow-up is exactly the case where the user has likely just navigated to a different slide or picked a different element. Trusting your last read here will silently edit the wrong file. Re-read, compare `slideId` / `pageIndex` / `selection` against what you used last time, and act on the new values.
 
 ## How to read it
 
@@ -68,6 +78,8 @@ Path is relative to the project root (the user's `cwd`, the directory that conta
 - **Fresh (under ~5 minutes old)**: trust it. Open `pagePath`, do the work.
 - **Older than ~5 minutes, or older than your last interaction with the user**: confirm with the user before editing. The dev server may not be running; the user may have switched contexts.
 - **Hours/days old**: ignore it. Ask the user which slide they mean.
+
+A *newer* `updatedAt` than the one you saw last turn is the normal signal that the user has moved — switch to the new `slideId` / `pageIndex` / `selection` without asking.
 
 ## When the file is missing
 
