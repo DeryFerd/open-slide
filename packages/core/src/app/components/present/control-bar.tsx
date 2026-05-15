@@ -5,6 +5,8 @@ import {
   Grid2x2,
   Keyboard,
   LogOut,
+  Maximize,
+  Minimize,
   MonitorSpeaker,
   Square,
   Sun,
@@ -24,12 +26,14 @@ type Props = {
   blackout: 'black' | 'white' | null;
   laser: boolean;
   allowExit: boolean;
+  windowed: boolean;
   onPrev: () => void;
   onNext: () => void;
   onOverview: () => void;
   onBlackout: (mode: 'black' | 'white') => void;
   onLaser: () => void;
   onPresenter: () => void;
+  onToggleFullscreen: () => void;
   onHelp: () => void;
   onExit: () => void;
   /**
@@ -48,12 +52,14 @@ export function PresentControlBar({
   blackout,
   laser,
   allowExit,
+  windowed,
   onPrev,
   onNext,
   onOverview,
   onBlackout,
   onLaser,
   onPresenter,
+  onToggleFullscreen,
   onHelp,
   onExit,
   tooltipContainer,
@@ -122,6 +128,12 @@ export function PresentControlBar({
             </BarButton>
             <BarButton label={t.present.presenterAria} onClick={onPresenter}>
               <MonitorSpeaker className="size-4" />
+            </BarButton>
+            <BarButton
+              label={windowed ? t.present.enterFullscreenAria : t.present.exitFullscreenAria}
+              onClick={onToggleFullscreen}
+            >
+              {windowed ? <Maximize className="size-4" /> : <Minimize className="size-4" />}
             </BarButton>
             <BarButton label={t.present.helpAria} onClick={onHelp}>
               <Keyboard className="size-4" />

@@ -97,6 +97,10 @@ export type Locale = {
     pdfExportFailed: string;
     pdfExportSafariUnsupported: string;
     present: string;
+    presentMenuAria: string;
+    presentInWindow: string;
+    presentFullscreen: string;
+    presentPresenter: string;
     slidesTab: string;
     assetsTab: string;
     renameSlide: string;
@@ -141,6 +145,8 @@ export type Locale = {
     whiteoutAria: string;
     laserAria: string;
     presenterAria: string;
+    enterFullscreenAria: string;
+    exitFullscreenAria: string;
     helpAria: string;
     exitAria: string;
     elapsedTime: string;

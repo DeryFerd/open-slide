@@ -1,5 +1,16 @@
 import config from 'virtual:open-slide/config';
-import { ChevronLeft, Download, FileCode2, FileText, Loader2, Pencil, Play } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  Download,
+  FileCode2,
+  FileText,
+  Loader2,
+  Maximize,
+  MonitorSpeaker,
+  Pencil,
+  Play,
+} from 'lucide-react';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -33,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { ClickNavZones } from '../components/click-nav-zones';
 import { NotesDrawer } from '../components/notes-drawer';
 import { PdfProgressToast } from '../components/pdf-progress-toast';
-import { Player } from '../components/player';
+import { openPresenterWindow, Player } from '../components/player';
 import { SlideCanvas } from '../components/slide-canvas';
 import { type ThumbnailActions, ThumbnailRail } from '../components/thumbnail-rail';
 import { exportSlideAsHtml } from '../lib/export-html';
@@ -48,7 +59,7 @@ export function Slide() {
   const { slideId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { slide, error } = useSlideModule(slideId);
-  const [playing, setPlaying] = useState(false);
+  const [playMode, setPlayMode] = useState<'window' | 'fullscreen' | null>(null);
   const [exporting, setExporting] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
   const { renameSlide } = useFolders();
@@ -204,7 +215,7 @@ export function Slide() {
   );
 
   useEffect(() => {
-    if (playing) return;
+    if (playMode) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.matches('input, textarea')) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
@@ -214,12 +225,12 @@ export function Slide() {
         e.preventDefault();
         goTo(index - 1);
       } else if (e.key === 'f' || e.key === 'F') {
-        setPlaying(true);
+        setPlayMode('fullscreen');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [index, goTo, playing]);
+  }, [index, goTo, playMode]);
 
   if (error) {
     return (
@@ -298,16 +309,17 @@ export function Slide() {
     );
   }
 
-  if (playing) {
+  if (playMode) {
     return (
       <Player
         pages={pages}
         design={slide.design}
         index={index}
         onIndexChange={goTo}
-        onExit={() => setPlaying(false)}
+        onExit={() => setPlayMode(null)}
         controls
         slideId={slideId}
+        fullscreen={playMode === 'fullscreen'}
       />
     );
   }
@@ -447,18 +459,52 @@ export function Slide() {
               {view === 'slides' && <InspectToggleButton />}
               <span aria-hidden className="mx-0.5 hidden h-5 w-px bg-hairline md:block" />
               {view === 'slides' && (
-                <Button
-                  size="sm"
-                  variant="brand"
-                  onClick={() => setPlaying(true)}
-                  className="px-2.5 md:px-3"
-                >
-                  <Play className="size-3.5 fill-current" />
-                  <span className="hidden md:inline">{t.slide.present}</span>
-                  <kbd className="ml-1 hidden rounded-[3px] bg-brand-foreground/15 px-1 font-mono text-[9.5px] tracking-[0.04em] md:inline">
-                    F
-                  </kbd>
-                </Button>
+                <div className="inline-flex items-stretch">
+                  <Button
+                    size="sm"
+                    variant="brand"
+                    onClick={() => setPlayMode('fullscreen')}
+                    className="rounded-r-none px-2.5 md:px-3"
+                  >
+                    <Play className="size-3.5 fill-current" />
+                    <span className="hidden md:inline">{t.slide.present}</span>
+                    <kbd className="ml-1 hidden rounded-[3px] bg-brand-foreground/15 px-1 font-mono text-[9.5px] tracking-[0.04em] md:inline">
+                      F
+                    </kbd>
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      type="button"
+                      aria-label={t.slide.presentMenuAria}
+                      title={t.slide.presentMenuAria}
+                      className={cn(
+                        buttonVariants({ variant: 'brand', size: 'sm' }),
+                        'rounded-l-none px-1.5 shadow-[inset_1px_0_0_oklch(0_0_0/0.12),inset_0_1px_0_oklch(1_0_0/0.18),0_1px_0_oklch(0_0_0/0.16)]',
+                      )}
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[200px]">
+                      <DropdownMenuItem onSelect={() => setPlayMode('window')}>
+                        <Play />
+                        {t.slide.presentInWindow}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setPlayMode('fullscreen')}>
+                        <Maximize />
+                        {t.slide.presentFullscreen}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          if (slideId) openPresenterWindow(slideId);
+                          setPlayMode('window');
+                        }}
+                      >
+                        <MonitorSpeaker />
+                        {t.slide.presentPresenter}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
             </div>
           </header>

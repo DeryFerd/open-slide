@@ -32,6 +32,12 @@ type Props = {
   allowExit?: boolean;
   controls?: boolean;
   slideId?: string;
+  /**
+   * When true, the Player enters the browser Fullscreen API on mount.
+   * When false, it renders as a window-sized overlay (viewport-filling)
+   * without entering fullscreen. Defaults to true for back-compat.
+   */
+  fullscreen?: boolean;
 };
 
 export function Player({
@@ -43,6 +49,7 @@ export function Player({
   allowExit = true,
   controls = false,
   slideId,
+  fullscreen = true,
 }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   // Mirrored as state so descendants portaling *into* the player subtree
@@ -60,6 +67,12 @@ export function Player({
   const [laser, setLaser] = useState(false);
   const [keyboardDriven, setKeyboardDriven] = useState(false);
   const [startedAt] = useState(() => Date.now());
+  const [windowed, setWindowed] = useState(!fullscreen);
+  // Mirror windowed into a ref so the fullscreenchange listener can read the
+  // latest value without re-binding — exits from window mode must not call
+  // onExit, but exits initiated by the browser (Esc in fullscreen) must.
+  const windowedRef = useRef(windowed);
+  windowedRef.current = windowed;
 
   const canPrev = index > 0;
   const canNext = index < pages.length - 1;
@@ -90,6 +103,7 @@ export function Player({
   });
 
   useEffect(() => {
+    if (windowed) return;
     const el = rootRef.current;
     if (!el) return;
     if (document.fullscreenElement !== el) {
@@ -98,16 +112,20 @@ export function Player({
     return () => {
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     };
-  }, []);
+  }, [windowed]);
 
   useEffect(() => {
     if (!allowExit) return;
     const onFsChange = () => {
-      if (!document.fullscreenElement) onExit();
+      if (!document.fullscreenElement && !windowedRef.current) onExit();
     };
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [onExit, allowExit]);
+
+  const toggleFullscreen = useCallback(() => {
+    setWindowed((w) => !w);
+  }, []);
 
   // Player is the source of truth: it re-publishes state on every change
   // and answers `request-state` pings so newly opened presenter windows
@@ -271,7 +289,7 @@ export function Player({
     <div
       ref={setRoot}
       className={cn(
-        'relative flex h-dvh w-screen items-center justify-center bg-black',
+        'fixed inset-0 flex items-center justify-center overflow-hidden bg-black',
         controls && 'select-none',
         controls && (hideCursor ? 'cursor-none' : 'cursor-default'),
       )}
@@ -310,12 +328,14 @@ export function Player({
             blackout={blackout}
             laser={laser}
             allowExit={allowExit}
+            windowed={windowed}
             onPrev={goPrev}
             onNext={goNext}
             onOverview={() => setOverviewOpen(true)}
             onBlackout={(mode) => setBlackout((c) => (c === mode ? null : mode))}
             onLaser={() => setLaser((v) => !v)}
             onPresenter={() => slideId && openPresenterWindow(slideId)}
+            onToggleFullscreen={toggleFullscreen}
             onHelp={() => setHelpOpen(true)}
             onExit={onExit}
           />
@@ -334,7 +354,7 @@ export function Player({
   );
 }
 
-function openPresenterWindow(slideId: string) {
+export function openPresenterWindow(slideId: string) {
   if (typeof window === 'undefined') return;
   const url = `/s/${encodeURIComponent(slideId)}/presenter`;
   window.open(url, `open-slide-presenter-${slideId}`, 'popup,width=1280,height=800');
