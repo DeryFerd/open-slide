@@ -6,6 +6,7 @@ import { parse as babelParse } from '@babel/parser';
 import * as t from '@babel/types';
 import type { Connect, Plugin, ViteDevServer } from 'vite';
 import { walkAll, walkJsx } from './babel-walk.ts';
+import { validateMutationRequest } from './request-guard.ts';
 
 const MARKER_RE =
   /\{\/\*\s*@slide-comment\s+id="(c-[a-f0-9]+)"\s+ts="([^"]+)"\s+text="([A-Za-z0-9_-]+={0,2})"\s*\*\/\}/g;
@@ -1459,6 +1460,8 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
         const url = new URL(req.url ?? '/', 'http://local');
         const method = req.method ?? 'GET';
         if (method !== 'POST') return next();
+        const requestCheck = validateMutationRequest(req, { requireJsonBody: true });
+        if (!requestCheck.ok) return json(res, requestCheck.status, { error: requestCheck.error });
 
         try {
           if (url.pathname === '/') {
@@ -1545,6 +1548,10 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
           }
 
           if (method === 'POST' && url.pathname === '/add') {
+            const requestCheck = validateMutationRequest(req, { requireJsonBody: true });
+            if (!requestCheck.ok) {
+              return json(res, requestCheck.status, { error: requestCheck.error });
+            }
             const body = (await readBody(req)) as AddBody;
             const slideId = body.slideId ?? '';
             const file = resolveSlidePath(userCwd, slidesDir, slideId);
@@ -1582,6 +1589,10 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
           }
 
           if (method === 'DELETE' && url.pathname.startsWith('/')) {
+            const requestCheck = validateMutationRequest(req);
+            if (!requestCheck.ok) {
+              return json(res, requestCheck.status, { error: requestCheck.error });
+            }
             const id = url.pathname.slice(1);
             if (!/^c-[a-f0-9]+$/.test(id)) return json(res, 400, { error: 'invalid id' });
             const slideId = url.searchParams.get('slideId') ?? '';
