@@ -4,8 +4,9 @@ import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
 import * as t from '@babel/types';
-import type { Connect, Plugin, ViteDevServer } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 import { walkAll, walkJsx } from './babel-walk.ts';
+import { readJsonBodyOrError } from './json-body.ts';
 import { validateMutationRequest } from './request-guard.ts';
 
 const MARKER_RE =
@@ -43,23 +44,6 @@ export function b64urlEncode(s: string): string {
 export function b64urlDecode(s: string): string {
   const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
   return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/') + pad, 'base64').toString('utf8');
-}
-
-async function readBody(req: Connect.IncomingMessage): Promise<unknown> {
-  return await new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve({});
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on('error', reject);
-  });
 }
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -160,7 +144,7 @@ function planInsertion(source: string, target: JsxContainer): InsertionPlan | nu
   return null;
 }
 
-// Walk innermost → outermost looking for the first JSX container we
+// Walk innermost â†’ outermost looking for the first JSX container we
 // can insert *inside* (not self-closing). Self-closing elements like
 // `<img/>` get hoisted to their nearest non-self-closing ancestor.
 function findInsertion(
@@ -446,7 +430,7 @@ function formatJsxText(value: string): string {
 }
 
 type TextCandidate = {
-  // Normalized current text the candidate represents — what an
+  // Normalized current text the candidate represents â€” what an
   // unambiguous DOM `textContent` would render here. Used to match
   // against the client-supplied `prevText` when there's more than one.
   current: string;
@@ -875,7 +859,7 @@ function buildTextRangeStyleSplices(
   return splices.length > 0 ? splices : null;
 }
 
-// `<Wrap>{children}</Wrap>` and `<h2>{title}</h2>` — sole child is a
+// `<Wrap>{children}</Wrap>` and `<h2>{title}</h2>` â€” sole child is a
 // JSXExpressionContainer wrapping a bare Identifier. Returns the identifier
 // name; callers branch on `'children'` vs. a generic prop passthrough.
 function propPassthroughName(element: t.JSXElement): string | null {
@@ -935,7 +919,7 @@ function findEnclosingComponent(ast: t.File, target: t.Node): EnclosingComponent
 function componentDestructuresProp(fn: EnclosingComponent['fn'], propName: string): boolean {
   if (fn.params.length === 0) return false;
   let first: t.Node = fn.params[0];
-  // Handle `({ title }: Props = defaults)` — strip the default-value wrapper.
+  // Handle `({ title }: Props = defaults)` â€” strip the default-value wrapper.
   if (t.isAssignmentPattern(first)) first = first.left;
   if (!t.isObjectPattern(first)) return false;
   for (const prop of first.properties) {
@@ -1000,7 +984,7 @@ function collectPropCallSiteCandidates(
   return out;
 }
 
-// Smallest enclosing `arr.map((p) => …)` callback (or `.flatMap`) that
+// Smallest enclosing `arr.map((p) => â€¦)` callback (or `.flatMap`) that
 // covers `target`. Returns the callback fn plus the array argument node.
 function findEnclosingMapCallback(
   ast: t.Node,
@@ -1090,14 +1074,14 @@ function decodeMapPassthrough(
 
   if (t.isIdentifier(expr)) {
     const fieldName = expr.name;
-    // Param is `{ field, ... }` destructuring — the identifier names the
+    // Param is `{ field, ... }` destructuring â€” the identifier names the
     // destructured property. Skip alias/rename forms (`{ field: alias }`).
     if (!callbackParam || !t.isObjectPattern(callbackParam)) return null;
     for (const prop of callbackParam.properties) {
       if (!t.isObjectProperty(prop) || prop.computed) continue;
       if (!t.isIdentifier(prop.key) || prop.key.name !== fieldName) continue;
-      // Shorthand `{ field }` → value is also an Identifier with same name.
-      // Aliased `{ field: other }` → value is a different identifier; skip.
+      // Shorthand `{ field }` â†’ value is also an Identifier with same name.
+      // Aliased `{ field: other }` â†’ value is a different identifier; skip.
       return t.isIdentifier(prop.value) && prop.value.name === fieldName ? fieldName : null;
     }
   }
@@ -1201,7 +1185,7 @@ function findImports(ast: t.File): ImportInfo[] {
 }
 
 function collectTopLevelIdentifiers(ast: t.File): Set<string> {
-  // Only need to avoid colliding with anything resolvable by JSX —
+  // Only need to avoid colliding with anything resolvable by JSX â€”
   // import bindings cover the common case. Local consts/lets are
   // handled by source-level identifier scanning below.
   const names = new Set<string>();
@@ -1465,7 +1449,9 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
 
         try {
           if (url.pathname === '/') {
-            const body = (await readBody(req)) as EditBody;
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as EditBody;
             const slideId = body.slideId ?? '';
             const file = resolveSlidePath(userCwd, slidesDir, slideId);
             if (!file) return json(res, 400, { error: 'invalid slideId' });
@@ -1490,7 +1476,9 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
           // session lands as a single HMR. Per-edit failures are
           // reported but don't abort the batch.
           if (url.pathname === '/batch') {
-            const body = (await readBody(req)) as EditBatchBody;
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as EditBatchBody;
             const slideId = body.slideId ?? '';
             const file = resolveSlidePath(userCwd, slidesDir, slideId);
             if (!file) return json(res, 400, { error: 'invalid slideId' });
@@ -1552,7 +1540,9 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
             if (!requestCheck.ok) {
               return json(res, requestCheck.status, { error: requestCheck.error });
             }
-            const body = (await readBody(req)) as AddBody;
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as AddBody;
             const slideId = body.slideId ?? '';
             const file = resolveSlidePath(userCwd, slidesDir, slideId);
             if (!file) return json(res, 400, { error: 'invalid slideId' });

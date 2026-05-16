@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
-import type { Connect, Plugin, ViteDevServer } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
+import { readJsonBodyOrError } from './json-body.ts';
 
 const FOLDER_ID_RE = /^f-[a-f0-9]{8}$/;
 const SLIDE_ID_RE = /^[a-z0-9_-]+$/i;
@@ -73,23 +74,6 @@ type CreateBody = { name?: unknown; icon?: unknown };
 type PatchBody = { name?: unknown; icon?: unknown };
 type AssignBody = { slideId?: unknown; folderId?: unknown };
 type SlidePatchBody = { name?: unknown };
-
-async function readBody(req: Connect.IncomingMessage): Promise<unknown> {
-  return await new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve({});
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on('error', reject);
-  });
-}
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -255,7 +239,7 @@ export function updateMetaTitleInSource(source: string, title: string): string |
       return source.slice(0, openBrace + 1) + newBody + source.slice(closeBrace);
     }
 
-    // No title yet — inject as the first property, copying the indentation of
+    // No title yet â€” inject as the first property, copying the indentation of
     // the first existing property (or a sensible default for an empty object).
     const firstIndentMatch = body.match(/\n([ \t]+)\S/);
     const indent = firstIndentMatch ? firstIndentMatch[1] : '  ';
@@ -629,7 +613,9 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             const slideId = reorderMatch[1];
             if (!SLIDE_ID_RE.test(slideId)) return json(res, 400, { error: 'invalid slideId' });
 
-            const body = (await readBody(req)) as { order?: unknown };
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as { order?: unknown };
             if (!Array.isArray(body.order)) return json(res, 400, { error: 'invalid order' });
             const order: number[] = [];
             for (const v of body.order) {
@@ -651,13 +637,13 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             if (reordered === null) {
               return json(res, 422, {
                 error:
-                  'could not reorder pages — order must be a permutation of the existing array',
+                  'could not reorder pages â€” order must be a permutation of the existing array',
               });
             }
             const withNotes = reorderNotesArrayInSource(reordered, order);
             if (withNotes === null) {
               return json(res, 422, {
-                error: 'could not reorder pages — `notes` export has an unexpected shape',
+                error: 'could not reorder pages â€” `notes` export has an unexpected shape',
               });
             }
             if (withNotes !== source) {
@@ -695,8 +681,8 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             if (updated === null) {
               return json(res, 422, {
                 error: isDelete
-                  ? 'could not delete page — index out of range or default export is not an array'
-                  : 'could not duplicate page — index out of range or default export is not an array',
+                  ? 'could not delete page â€” index out of range or default export is not an array'
+                  : 'could not duplicate page â€” index out of range or default export is not an array',
               });
             }
             if (updated !== source) {
@@ -711,7 +697,9 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
           if (!SLIDE_ID_RE.test(slideId)) return json(res, 400, { error: 'invalid slideId' });
 
           if (method === 'PATCH') {
-            const body = (await readBody(req)) as SlidePatchBody;
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as SlidePatchBody;
             const name = validateSlideName(body.name);
             if (!name) return json(res, 400, { error: 'invalid name' });
 
@@ -736,7 +724,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             }
             // The TSX edit lands through Vite's normal HMR pipeline, but the
             // React state holding `slide.meta` in the editor won't re-fetch on
-            // its own — tell every client to refresh so the new title shows up.
+            // its own â€” tell every client to refresh so the new title shows up.
             server.ws.send({ type: 'full-reload' });
             return json(res, 200, { ok: true, slideId, name });
           }
@@ -832,7 +820,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
                   await fs.access(file);
                   return json(res, 409, { error: 'asset exists' });
                 } catch {
-                  // fall through — file does not exist, OK to write
+                  // fall through â€” file does not exist, OK to write
                 }
               }
 
@@ -869,7 +857,9 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             }
 
             if (method === 'PATCH') {
-              const body = (await readBody(req)) as { name?: unknown };
+              const bodyResult = await readJsonBodyOrError(req);
+              if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+              const body = bodyResult.body as { name?: unknown };
               const target = validateAssetName(body.name);
               if (!target) return json(res, 400, { error: 'invalid name' });
               if (target === filename) return json(res, 200, { ok: true, name: filename });
@@ -971,7 +961,9 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
           }
 
           if (method === 'POST' && url.pathname === '/') {
-            const body = (await readBody(req)) as CreateBody;
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as CreateBody;
             const name = validateName(body.name);
             if (!name) return json(res, 400, { error: 'invalid name' });
             const icon = validateIcon(body.icon);
@@ -985,7 +977,9 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
           }
 
           if (method === 'PUT' && url.pathname === '/assign') {
-            const body = (await readBody(req)) as AssignBody;
+            const bodyResult = await readJsonBodyOrError(req);
+            if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+            const body = bodyResult.body as AssignBody;
             if (typeof body.slideId !== 'string' || !SLIDE_ID_RE.test(body.slideId)) {
               return json(res, 400, { error: 'invalid slideId' });
             }
@@ -1018,7 +1012,9 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             if (!FOLDER_ID_RE.test(id)) return json(res, 400, { error: 'invalid id' });
 
             if (method === 'PATCH') {
-              const body = (await readBody(req)) as PatchBody;
+              const bodyResult = await readJsonBodyOrError(req);
+              if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+              const body = bodyResult.body as PatchBody;
               const manifest = await readManifest(manifestPath);
               const folder = manifest.folders.find((f) => f.id === id);
               if (!folder) return json(res, 404, { error: 'folder not found' });

@@ -3,7 +3,8 @@ import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
 import * as t from '@babel/types';
-import type { Connect, Plugin, ViteDevServer } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
+import { readJsonBodyOrError } from './json-body.ts';
 
 const SLIDE_ID_RE = /^[a-z0-9_-]+$/i;
 
@@ -16,23 +17,6 @@ type NotesBody = {
 export type ApplyNotesEditResult =
   | { ok: true; source: string }
   | { ok: false; status: number; error: string };
-
-async function readBody(req: Connect.IncomingMessage): Promise<unknown> {
-  return await new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve({});
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on('error', reject);
-  });
-}
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -191,7 +175,7 @@ export type NotesPluginOptions = {
 export function notesPlugin(opts: NotesPluginOptions): Plugin {
   const userCwd = opts.userCwd;
   const slidesDir = opts.slidesDir ?? 'slides';
-  // Suppress HMR for our own writes — RFR bails on the slide's mixed exports
+  // Suppress HMR for our own writes â€” RFR bails on the slide's mixed exports
   // and remounts the tree, stealing textarea focus mid-typing.
   const recentWrites = new Map<string, number>();
   const RECENT_WRITE_WINDOW_MS = 1500;
@@ -214,7 +198,9 @@ export function notesPlugin(opts: NotesPluginOptions): Plugin {
         if (method !== 'PUT' || url.pathname !== '/') return next();
 
         try {
-          const body = (await readBody(req)) as NotesBody;
+          const bodyResult = await readJsonBodyOrError(req);
+          if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
+          const body = bodyResult.body as NotesBody;
           const slideId = body.slideId ?? '';
           const file = resolveSlidePath(userCwd, slidesDir, slideId);
           if (!file) return json(res, 400, { error: 'invalid slideId' });
