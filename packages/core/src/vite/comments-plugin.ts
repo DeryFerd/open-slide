@@ -6,7 +6,7 @@ import { parse as babelParse } from '@babel/parser';
 import * as t from '@babel/types';
 import type { Plugin, ViteDevServer } from 'vite';
 import { walkAll, walkJsx } from './babel-walk.ts';
-import { readJsonBodyOrError } from './json-body.ts';
+import { readMutationJsonBodyOrError } from './mutation-request.ts';
 import { validateMutationRequest } from './request-guard.ts';
 
 const MARKER_RE =
@@ -1444,12 +1444,10 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
         const url = new URL(req.url ?? '/', 'http://local');
         const method = req.method ?? 'GET';
         if (method !== 'POST') return next();
-        const requestCheck = validateMutationRequest(req, { requireJsonBody: true });
-        if (!requestCheck.ok) return json(res, requestCheck.status, { error: requestCheck.error });
 
         try {
           if (url.pathname === '/') {
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as EditBody;
             const slideId = body.slideId ?? '';
@@ -1476,7 +1474,7 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
           // session lands as a single HMR. Per-edit failures are
           // reported but don't abort the batch.
           if (url.pathname === '/batch') {
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as EditBatchBody;
             const slideId = body.slideId ?? '';
@@ -1536,11 +1534,7 @@ export function commentsPlugin(opts: CommentsPluginOptions): Plugin {
           }
 
           if (method === 'POST' && url.pathname === '/add') {
-            const requestCheck = validateMutationRequest(req, { requireJsonBody: true });
-            if (!requestCheck.ok) {
-              return json(res, requestCheck.status, { error: requestCheck.error });
-            }
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as AddBody;
             const slideId = body.slideId ?? '';

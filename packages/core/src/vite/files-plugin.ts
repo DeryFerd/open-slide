@@ -4,7 +4,7 @@ import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
 import type { Plugin, ViteDevServer } from 'vite';
-import { readJsonBodyOrError } from './json-body.ts';
+import { readMutationJsonBodyOrError } from './mutation-request.ts';
 
 const FOLDER_ID_RE = /^f-[a-f0-9]{8}$/;
 const SLIDE_ID_RE = /^[a-z0-9_-]+$/i;
@@ -239,7 +239,7 @@ export function updateMetaTitleInSource(source: string, title: string): string |
       return source.slice(0, openBrace + 1) + newBody + source.slice(closeBrace);
     }
 
-    // No title yet â€” inject as the first property, copying the indentation of
+    // No title yet Ã¢â‚¬â€ inject as the first property, copying the indentation of
     // the first existing property (or a sensible default for an empty object).
     const firstIndentMatch = body.match(/\n([ \t]+)\S/);
     const indent = firstIndentMatch ? firstIndentMatch[1] : '  ';
@@ -613,7 +613,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             const slideId = reorderMatch[1];
             if (!SLIDE_ID_RE.test(slideId)) return json(res, 400, { error: 'invalid slideId' });
 
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as { order?: unknown };
             if (!Array.isArray(body.order)) return json(res, 400, { error: 'invalid order' });
@@ -637,13 +637,13 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             if (reordered === null) {
               return json(res, 422, {
                 error:
-                  'could not reorder pages â€” order must be a permutation of the existing array',
+                  'could not reorder pages Ã¢â‚¬â€ order must be a permutation of the existing array',
               });
             }
             const withNotes = reorderNotesArrayInSource(reordered, order);
             if (withNotes === null) {
               return json(res, 422, {
-                error: 'could not reorder pages â€” `notes` export has an unexpected shape',
+                error: 'could not reorder pages Ã¢â‚¬â€ `notes` export has an unexpected shape',
               });
             }
             if (withNotes !== source) {
@@ -681,8 +681,8 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             if (updated === null) {
               return json(res, 422, {
                 error: isDelete
-                  ? 'could not delete page â€” index out of range or default export is not an array'
-                  : 'could not duplicate page â€” index out of range or default export is not an array',
+                  ? 'could not delete page Ã¢â‚¬â€ index out of range or default export is not an array'
+                  : 'could not duplicate page Ã¢â‚¬â€ index out of range or default export is not an array',
               });
             }
             if (updated !== source) {
@@ -697,7 +697,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
           if (!SLIDE_ID_RE.test(slideId)) return json(res, 400, { error: 'invalid slideId' });
 
           if (method === 'PATCH') {
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as SlidePatchBody;
             const name = validateSlideName(body.name);
@@ -724,7 +724,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             }
             // The TSX edit lands through Vite's normal HMR pipeline, but the
             // React state holding `slide.meta` in the editor won't re-fetch on
-            // its own â€” tell every client to refresh so the new title shows up.
+            // its own Ã¢â‚¬â€ tell every client to refresh so the new title shows up.
             server.ws.send({ type: 'full-reload' });
             return json(res, 200, { ok: true, slideId, name });
           }
@@ -820,7 +820,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
                   await fs.access(file);
                   return json(res, 409, { error: 'asset exists' });
                 } catch {
-                  // fall through â€” file does not exist, OK to write
+                  // fall through Ã¢â‚¬â€ file does not exist, OK to write
                 }
               }
 
@@ -857,7 +857,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             }
 
             if (method === 'PATCH') {
-              const bodyResult = await readJsonBodyOrError(req);
+              const bodyResult = await readMutationJsonBodyOrError(req);
               if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
               const body = bodyResult.body as { name?: unknown };
               const target = validateAssetName(body.name);
@@ -961,7 +961,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
           }
 
           if (method === 'POST' && url.pathname === '/') {
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as CreateBody;
             const name = validateName(body.name);
@@ -977,7 +977,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
           }
 
           if (method === 'PUT' && url.pathname === '/assign') {
-            const bodyResult = await readJsonBodyOrError(req);
+            const bodyResult = await readMutationJsonBodyOrError(req);
             if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
             const body = bodyResult.body as AssignBody;
             if (typeof body.slideId !== 'string' || !SLIDE_ID_RE.test(body.slideId)) {
@@ -1012,7 +1012,7 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
             if (!FOLDER_ID_RE.test(id)) return json(res, 400, { error: 'invalid id' });
 
             if (method === 'PATCH') {
-              const bodyResult = await readJsonBodyOrError(req);
+              const bodyResult = await readMutationJsonBodyOrError(req);
               if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
               const body = bodyResult.body as PatchBody;
               const manifest = await readManifest(manifestPath);

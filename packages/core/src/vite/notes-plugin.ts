@@ -4,7 +4,7 @@ import path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
 import * as t from '@babel/types';
 import type { Plugin, ViteDevServer } from 'vite';
-import { readJsonBodyOrError } from './json-body.ts';
+import { readMutationJsonBodyOrError } from './mutation-request.ts';
 
 const SLIDE_ID_RE = /^[a-z0-9_-]+$/i;
 
@@ -198,7 +198,7 @@ export function notesPlugin(opts: NotesPluginOptions): Plugin {
         if (method !== 'PUT' || url.pathname !== '/') return next();
 
         try {
-          const bodyResult = await readJsonBodyOrError(req);
+          const bodyResult = await readMutationJsonBodyOrError(req);
           if (!bodyResult.ok) return json(res, bodyResult.status, { error: bodyResult.error });
           const body = bodyResult.body as NotesBody;
           const slideId = body.slideId ?? '';
